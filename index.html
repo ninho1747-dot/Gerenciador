@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Controle de Materiais</title>
+
+<style>
+
+*{
+margin:0;
+padding:0;
+box-sizing:border-box;
+font-family:Arial,sans-serif;
+}
+
+body{
+background:#f4f6f9;
+padding:20px;
+}
+
+.container{
+max-width:1200px;
+margin:auto;
+}
+
+h1{
+text-align:center;
+margin-bottom:20px;
+color:#003366;
+}
+
+.card{
+background:#fff;
+padding:15px;
+border-radius:10px;
+box-shadow:0 2px 8px rgba(0,0,0,.1);
+margin-bottom:20px;
+}
+
+.grid{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+gap:10px;
+}
+
+input,
+select,
+button{
+width:100%;
+padding:10px;
+border-radius:6px;
+border:1px solid #ccc;
+}
+
+button{
+background:#003366;
+color:white;
+border:none;
+cursor:pointer;
+}
+
+button:hover{
+background:#0055aa;
+}
+
+table{
+width:100%;
+border-collapse:collapse;
+background:white;
+}
+
+th{
+background:#003366;
+color:white;
+}
+
+th,td{
+border:1px solid #ddd;
+padding:10px;
+text-align:center;
+}
+
+.entrada{
+color:green;
+font-weight:bold;
+}
+
+.saida{
+color:red;
+font-weight:bold;
+}
+
+.dashboard{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+gap:15px;
+margin-bottom:20px;
+}
+
+.box{
+background:white;
+padding:20px;
+border-radius:10px;
+box-shadow:0 2px 8px rgba(0,0,0,.1);
+text-align:center;
+}
+
+.box h2{
+color:#003366;
+font-size:32px;
+margin-bottom:10px;
+}
+
+.relatorio-btn{
+background:#0a7d32;
+}
+
+.relatorio-btn:hover{
+background:#0d9c3f;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>📦 Controle de Materiais</h1>
+
+<div class="dashboard">
+
+<div class="box">
+<h2 id="totalMateriais">0</h2>
+<p>Materiais Cadastrados</p>
+</div>
+
+<div class="box">
+<h2 id="totalEstoque">0</h2>
+<p>Total em Estoque</p>
+</div>
+
+</div>
+
+<div class="card">
+
+<h3>Cadastrar Material</h3>
+
+<br>
+
+<div class="grid">
+
+<input
+type="text"
+id="nomeMaterial"
+placeholder="Nome do Material">
+
+<select id="categoria">
+<option>Elétrico</option>
+<option>Limpeza Urbana</option>
+</select>
+
+<input
+type="number"
+id="quantidadeInicial"
+placeholder="Quantidade Inicial">
+
+<button onclick="cadastrarMaterial()">
+Cadastrar Material
+</button>
+
+</div>
+
+</div>
+
+<div class="card">
+
+<h3>Movimentação de Estoque</h3>
+
+<br>
+
+<div class="grid">
+
+<select id="materialMov">
+
+</select>
+
+<select id="tipoMov">
+
+<option value="entrada">
+Entrada
+</option>
+
+<option value="saida">
+Saída
+</option>
+
+</select>
+
+<input
+type="number"
+id="qtdMov"
+placeholder="Quantidade">
+
+<input
+type="text"
+id="responsavelMov"
+placeholder="Nome de quem retirou">
+
+<input
+type="text"
+id="destinoMov"
+placeholder="Destino do material">
+
+<button onclick="registrarMovimentacao()">
+Registrar Movimentação
+</button>
+
+</div>
+
+</div><div class="card">
+
+<h3>Estoque Atual</h3>
+
+<br>
+
+<table>
+
+<thead>
+
+<tr>
+<th>Material</th>
+<th>Categoria</th>
+<th>Quantidade</th>
+<th>Ações</th>
+</tr>
+
+</thead>
+
+<tbody id="tabelaMateriais">
+
+</tbody>
+
+</table>
+
+</div>
+
+<div class="card">
+
+<h3>Histórico de Movimentações</h3>
+
+<br>
+
+<table>
+
+<thead>
+
+<tr>
+<th>Data</th>
+<th>Material</th>
+<th>Tipo</th>
+<th>Quantidade</th>
+<th>Responsável</th>
+<th>Destino</th>
+</tr>
+
+</thead>
+
+<tbody id="historico">
+
+</tbody>
+
+</table>
+
+</div>
+
+<div class="card">
+
+<button
+class="relatorio-btn"
+onclick="gerarRelatorio()">
+
+📄 Gerar Relatório
+
+</button>
+
+</div>
+
+</div>
+
+<script>
+
+let materiais =
+JSON.parse(
+localStorage.getItem(
+"materiais"
+)
+) || [];
+
+let historico =
+JSON.parse(
+localStorage.getItem(
+"historico"
+)
+) || [];
+
+function salvar(){
+
+localStorage.setItem(
+"materiais",
+JSON.stringify(
+materiais
+)
+);
+
+localStorage.setItem(
+"historico",
+JSON.stringify(
+historico
+)
+);
+
+}
+
+function atualizarTela(){
+
+let tabela =
+document.getElementById(
+"tabelaMateriais"
+);
+
+tabela.innerHTML = "";
+
+let select =
+document.getElementById(
+"materialMov"
+);
+
+select.innerHTML = "";
+
+let estoqueTotal = 0;
+
+materiais.forEach(
+(m,index)=>{
+
+estoqueTotal +=
+Number(
+m.quantidade
+);
+
+tabela.innerHTML += `
+<tr>
+
+<td>${m.nome}</td>
+
+<td>${m.categoria}</td>
+
+<td>${m.quantidade}</td>
+
+<td>
+
+<button
+onclick="excluirMaterial(${index})">
+
+Excluir
+
+</button>
+
+</td>
+
+</tr>
+`;
+
+select.innerHTML += `
+<option value="${index}">
+${m.nome}
+</option>
+`;
+
+}
+);
+
+document.getElementById(
+"totalMateriais"
+).innerText =
+materiais.length;
+
+document.getElementById(
+"totalEstoque"
+).innerText =
+estoqueTotal;
+
+let hist =
+document.getElementById(
+"historico"
+);
+
+hist.innerHTML = "";[...historico]
+.reverse()
+.forEach(h=>{
+
+hist.innerHTML += `
+
+<tr>
+
+<td>${h.data}</td>
+
+<td>${h.material}</td>
+
+<td class="${h.tipo}">
+${h.tipo.toUpperCase()}
+</td>
+
+<td>${h.quantidade}</td>
+
+<td>${h.responsavel || "-"}</td>
+
+<td>${h.destino || "-"}</td>
+
+</tr>
+
+`;
+
+});
+
+}
+
+function cadastrarMaterial(){
+
+let nome =
+document.getElementById(
+"nomeMaterial"
+).value.trim();
+
+let categoria =
+document.getElementById(
+"categoria"
+).value;
+
+let qtd =
+Number(
+document.getElementById(
+"quantidadeInicial"
+).value
+);
+
+if(nome === ""){
+
+alert(
+"Digite o nome do material."
+);
+
+return;
+
+}
+
+if(
+isNaN(qtd) ||
+qtd < 0
+){
+
+alert(
+"Quantidade inválida."
+);
+
+return;
+
+}
+
+materiais.push({
+
+nome:nome,
+
+categoria:categoria,
+
+quantidade:qtd
+
+});
+
+salvar();
+
+atualizarTela();
+
+document.getElementById(
+"nomeMaterial"
+).value = "";
+
+document.getElementById(
+"quantidadeInicial"
+).value = "";
+
+alert(
+"Material cadastrado com sucesso!"
+);
+
+}
+
+function registrarMovimentacao(){
+
+if(
+materiais.length === 0
+){
+
+alert(
+"Cadastre um material primeiro."
+);
+
+return;
+
+}
+
+let indice =
+document.getElementById(
+"materialMov"
+).value;
+
+let tipo =
+document.getElementById(
+"tipoMov"
+).value;
+
+let qtd =
+Number(
+document.getElementById(
+"qtdMov"
+).value
+);
+
+let responsavel =
+document.getElementById(
+"responsavelMov"
+).value.trim();
+
+let destino =
+document.getElementById(
+"destinoMov"
+).value.trim();if(
+isNaN(qtd) ||
+qtd <= 0
+){
+
+alert(
+"Quantidade inválida."
+);
+
+return;
+
+}
+
+if(
+tipo === "saida"
+){
+
+if(
+responsavel === ""
+){
+
+alert(
+"Informe o responsável pela retirada."
+);
+
+return;
+
+}
+
+if(
+destino === ""
+){
+
+alert(
+"Informe o destino do material."
+);
+
+return;
+
+}
+
+if(
+materiais[indice]
+.quantidade < qtd
+){
+
+alert(
+"Estoque insuficiente."
+);
+
+return;
+
+}
+
+materiais[indice]
+.quantidade -= qtd;
+
+}
+else{
+
+materiais[indice]
+.quantidade += qtd;
+
+}
+
+historico.push({
+
+data:
+new Date()
+.toLocaleString(
+"pt-BR"
+),
+
+material:
+materiais[indice]
+.nome,
+
+tipo:tipo,
+
+quantidade:qtd,
+
+responsavel:
+responsavel || "-",
+
+destino:
+destino || "-"
+
+});
+
+salvar();
+
+atualizarTela();
+
+document.getElementById(
+"qtdMov"
+).value = "";
+
+document.getElementById(
+"responsavelMov"
+).value = "";
+
+document.getElementById(
+"destinoMov"
+).value = "";
+
+alert(
+"Movimentação registrada com sucesso!"
+);
+
+}
+
+function excluirMaterial(index){
+
+if(
+confirm(
+"Deseja realmente excluir este material?"
+)
+){
+
+materiais.splice(
+index,
+1
+);
+
+salvar();
+
+atualizarTela();
+
+alert(
+"Material excluído com sucesso."
+);
+
+}
+
+}function gerarRelatorio(){
+
+let janela =
+window.open(
+"",
+"_blank"
+);
+
+let estoqueHTML = "";
+
+materiais.forEach(m=>{
+
+estoqueHTML += `
+
+<tr>
+
+<td>${m.nome}</td>
+
+<td>${m.categoria}</td>
+
+<td>${m.quantidade}</td>
+
+</tr>
+
+`;
+
+});
+
+let historicoHTML = "";
+
+historico.forEach(h=>{
+
+historicoHTML += `
+
+<tr>
+
+<td>${h.data}</td>
+
+<td>${h.material}</td>
+
+<td>${h.tipo}</td>
+
+<td>${h.quantidade}</td>
+
+<td>${h.responsavel || "-"}</td>
+
+<td>${h.destino || "-"}</td>
+
+</tr>
+
+`;
+
+});
+
+janela.document.write(`
+
+<html>
+
+<head>
+
+<title>
+Relatório de Materiais
+</title>
+
+<style>
+
+body{
+font-family:Arial;
+padding:20px;
+}
+
+h1,h2{
+color:#003366;
+}
+
+table{
+width:100%;
+border-collapse:collapse;
+margin-top:10px;
+margin-bottom:20px;
+}
+
+th,td{
+border:1px solid #ccc;
+padding:8px;
+text-align:center;
+}
+
+th{
+background:#003366;
+color:white;
+}
+
+.info{
+margin-bottom:20px;
+font-size:16px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>
+Relatório de Controle de Materiais
+</h1>
+
+<div class="info">
+
+<strong>Data:</strong>
+
+${new Date().toLocaleString("pt-BR")}
+
+</div>
+
+<h2>Resumo Geral</h2>
+
+<p>
+
+<b>Total de Materiais:</b>
+
+${materiais.length}
+
+</p>
+
+<p>
+
+<b>Total em Estoque:</b>
+
+${materiais.reduce(
+(t,m)=>
+t + Number(m.quantidade),
+0
+)}
+
+</p>
+
+<h2>
+Estoque Atual
+</h2>
+
+<table>
+
+<tr>
+
+<th>Material</th>
+
+<th>Categoria</th>
+
+<th>Quantidade</th>
+
+</tr>
+
+${estoqueHTML}
+
+</table><h2>
+Histórico de Movimentações
+</h2>
+
+<table>
+
+<tr>
+
+<th>Data</th>
+
+<th>Material</th>
+
+<th>Tipo</th>
+
+<th>Quantidade</th>
+
+<th>Responsável</th>
+
+<th>Destino</th>
+
+</tr>
+
+${historicoHTML}
+
+</table>
+
+<script>
+
+window.print();
+
+<\/script>
+
+</body>
+
+</html>
+
+`);
+
+janela.document.close();
+
+}
+
+atualizarTela();
+
+</script>
+
+</body>
+
+</html>
