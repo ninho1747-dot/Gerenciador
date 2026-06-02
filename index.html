@@ -65,6 +65,12 @@ button:hover{
 background:#0055aa;
 }
 
+button:disabled {
+background: #cccccc;
+color: #666666;
+cursor: not-allowed;
+}
+
 table{
 width:100%;
 border-collapse:collapse;
@@ -121,6 +127,35 @@ background:#0a7d32;
 background:#0d9c3f;
 }
 
+.btn-acoes-historico {
+display: flex;
+gap: 10px;
+margin-bottom: 20px;
+}
+
+.undo-btn {
+background: #e67e22;
+}
+.undo-btn:hover {
+background: #d35400;
+}
+
+.redo-btn {
+background: #2980b9;
+}
+.redo-btn:hover {
+background: #3498db;
+}
+
+.btn-excluir-tabela {
+background: #c0392b;
+padding: 5px 10px;
+font-size: 13px;
+}
+.btn-excluir-tabela:hover {
+background: #e74c3c;
+}
+
 </style>
 </head>
 
@@ -129,6 +164,11 @@ background:#0d9c3f;
 <div class="container">
 
 <h1>📦 Controle de Materiais</h1>
+
+<div class="btn-acoes-historico">
+    <button id="btnUndo" class="undo-btn" onclick="desfazer()">↩️ Desfazer Última Ação</button>
+    <button id="btnRedo" class="redo-btn" onclick="refazer()">↪️ Refazer Ação</button>
+</div>
 
 <div class="dashboard">
 
@@ -220,7 +260,9 @@ Registrar Movimentação
 
 </div>
 
-</div><div class="card">
+</div>
+
+<div class="card">
 
 <h3>Estoque Atual</h3>
 
@@ -264,6 +306,7 @@ Registrar Movimentação
 <th>Quantidade</th>
 <th>Responsável</th>
 <th>Destino</th>
+<th>Ações</th>
 </tr>
 
 </thead>
@@ -292,586 +335,296 @@ onclick="gerarRelatorio()">
 
 <script>
 
-let materiais =
-JSON.parse(
-localStorage.getItem(
-"materiais"
-)
-) || [];
+let materiais = JSON.parse(localStorage.getItem("materiais")) || [];
+let historico = JSON.parse(localStorage.getItem("historico")) || [];
 
-let historico =
-JSON.parse(
-localStorage.getItem(
-"historico"
-)
-) || [];
+let pilhaUndo = [];
+let pilhaRedo = [];
 
 function salvar(){
+    localStorage.setItem("materiais", JSON.stringify(materiais));
+    localStorage.setItem("historico", JSON.stringify(historico));
+}
 
-localStorage.setItem(
-"materiais",
-JSON.stringify(
-materiais
-)
-);
+function salvarEstadoHistorico() {
+    pilhaUndo.push({
+        materiais: JSON.parse(JSON.stringify(materiais)),
+        historico: JSON.parse(JSON.stringify(historico))
+    });
+    pilhaRedo = [];
+}
 
-localStorage.setItem(
-"historico",
-JSON.stringify(
-historico
-)
-);
+function atualizarBotoesUndoRedo() {
+    document.getElementById("btnUndo").disabled = pilhaUndo.length === 0;
+    document.getElementById("btnRedo").disabled = pilhaRedo.length === 0;
+}
 
+function desfazer() {
+    if (pilhaUndo.length === 0) return;
+
+    pilhaRedo.push({
+        materiais: JSON.parse(JSON.stringify(materiais)),
+        historico: JSON.parse(JSON.stringify(historico))
+    });
+
+    let estadoAnterior = pilhaUndo.pop();
+    materiais = estadoAnterior.materiais;
+    historico = estadoAnterior.historico;
+
+    salvar();
+    atualizarTela();
+}
+
+function refazer() {
+    if (pilhaRedo.length === 0) return;
+
+    pilhaUndo.push({
+        materiais: JSON.parse(JSON.stringify(materiais)),
+        historico: JSON.parse(JSON.stringify(historico))
+    });
+
+    let proximoEstado = pilhaRedo.pop();
+    materiais = proximoEstado.materiais;
+    historico = proximoEstado.historico;
+
+    salvar();
+    atualizarTela();
 }
 
 function atualizarTela(){
+    let tabela = document.getElementById("tabelaMateriais");
+    tabela.innerHTML = "";
 
-let tabela =
-document.getElementById(
-"tabelaMateriais"
-);
+    let select = document.getElementById("materialMov");
+    select.innerHTML = "";
 
-tabela.innerHTML = "";
+    let estoqueTotal = 0;
 
-let select =
-document.getElementById(
-"materialMov"
-);
+    materiais.forEach((m, index) => {
+        estoqueTotal += Number(m.quantidade);
 
-select.innerHTML = "";
+        tabela.innerHTML += `
+        <tr>
+            <td>${m.nome}</td>
+            <td>${m.categoria}</td>
+            <td>${m.quantidade}</td>
+            <td>
+                <button class="btn-excluir-tabela" onclick="excluirMaterial(${index})">Excluir</button>
+            </td>
+        </tr>`;
 
-let estoqueTotal = 0;
+        select.innerHTML += `
+        <option value="${index}">
+            ${m.nome}
+        </option>`;
+    });
 
-materiais.forEach(
-(m,index)=>{
+    document.getElementById("totalMateriais").innerText = materiais.length;
+    document.getElementById("totalEstoque").innerText = estoqueTotal;
 
-estoqueTotal +=
-Number(
-m.quantidade
-);
+    let hist = document.getElementById("historico");
+    hist.innerHTML = "";
 
-tabela.innerHTML += `
-<tr>
+    // Mapeia o histórico mantendo o índice real antes de inverter a ordem para exibição
+    let historicoMapeado = historico.map((h, index) => ({ ...h, indexReal: index }));
+    
+    historicoMapeado.reverse().forEach(h => {
+        hist.innerHTML += `
+        <tr>
+            <td>${h.data}</td>
+            <td>${h.material}</td>
+            <td class="${h.tipo}">${h.tipo.toUpperCase()}</td>
+            <td>${h.quantidade}</td>
+            <td>${h.responsavel || "-"}</td>
+            <td>${h.destino || "-"}</td>
+            <td>
+                <button class="btn-excluir-tabela" onclick="apagarItemHistorico(${h.indexReal})">Apagar</button>
+            </td>
+        </tr>`;
+    });
 
-<td>${m.nome}</td>
-
-<td>${m.categoria}</td>
-
-<td>${m.quantidade}</td>
-
-<td>
-
-<button
-onclick="excluirMaterial(${index})">
-
-Excluir
-
-</button>
-
-</td>
-
-</tr>
-`;
-
-select.innerHTML += `
-<option value="${index}">
-${m.nome}
-</option>
-`;
-
-}
-);
-
-document.getElementById(
-"totalMateriais"
-).innerText =
-materiais.length;
-
-document.getElementById(
-"totalEstoque"
-).innerText =
-estoqueTotal;
-
-let hist =
-document.getElementById(
-"historico"
-);
-
-hist.innerHTML = "";[...historico]
-.reverse()
-.forEach(h=>{
-
-hist.innerHTML += `
-
-<tr>
-
-<td>${h.data}</td>
-
-<td>${h.material}</td>
-
-<td class="${h.tipo}">
-${h.tipo.toUpperCase()}
-</td>
-
-<td>${h.quantidade}</td>
-
-<td>${h.responsavel || "-"}</td>
-
-<td>${h.destino || "-"}</td>
-
-</tr>
-
-`;
-
-});
-
+    atualizarBotoesUndoRedo();
 }
 
 function cadastrarMaterial(){
+    let nome = document.getElementById("nomeMaterial").value.trim();
+    let categoria = document.getElementById("categoria").value;
+    let qtd = Number(document.getElementById("quantidadeInicial").value);
 
-let nome =
-document.getElementById(
-"nomeMaterial"
-).value.trim();
+    if(nome === ""){
+        alert("Digite o nome do material.");
+        return;
+    }
 
-let categoria =
-document.getElementById(
-"categoria"
-).value;
+    if(isNaN(qtd) || qtd < 0){
+        alert("Quantidade inválida.");
+        return;
+    }
 
-let qtd =
-Number(
-document.getElementById(
-"quantidadeInicial"
-).value
-);
+    salvarEstadoHistorico();
 
-if(nome === ""){
+    materiais.push({
+        nome: nome,
+        categoria: categoria,
+        quantidade: qtd
+    });
 
-alert(
-"Digite o nome do material."
-);
+    salvar();
+    atualizarTela();
 
-return;
+    document.getElementById("nomeMaterial").value = "";
+    document.getElementById("quantidadeInicial").value = "";
 
-}
-
-if(
-isNaN(qtd) ||
-qtd < 0
-){
-
-alert(
-"Quantidade inválida."
-);
-
-return;
-
-}
-
-materiais.push({
-
-nome:nome,
-
-categoria:categoria,
-
-quantidade:qtd
-
-});
-
-salvar();
-
-atualizarTela();
-
-document.getElementById(
-"nomeMaterial"
-).value = "";
-
-document.getElementById(
-"quantidadeInicial"
-).value = "";
-
-alert(
-"Material cadastrado com sucesso!"
-);
-
+    alert("Material cadastrado com sucesso!");
 }
 
 function registrarMovimentacao(){
+    if(materiais.length === 0){
+        alert("Cadastre um material primeiro.");
+        return;
+    }
 
-if(
-materiais.length === 0
-){
+    let indice = document.getElementById("materialMov").value;
+    let tipo = document.getElementById("tipoMov").value;
+    let qtd = Number(document.getElementById("qtdMov").value);
+    let responsavel = document.getElementById("responsavelMov").value.trim();
+    let destino = document.getElementById("destinoMov").value.trim();
 
-alert(
-"Cadastre um material primeiro."
-);
+    if(isNaN(qtd) || qtd <= 0){
+        alert("Quantidade inválida.");
+        return;
+    }
 
-return;
+    if(tipo === "saida"){
+        if(responsavel === ""){
+            alert("Informe o responsável pela retirada.");
+            return;
+        }
 
-}
+        if(destino === ""){
+            alert("Informe o destino do material.");
+            return;
+        }
 
-let indice =
-document.getElementById(
-"materialMov"
-).value;
+        if(materiais[indice].quantidade < qtd){
+            alert("Estoque insuficiente.");
+            return;
+        }
 
-let tipo =
-document.getElementById(
-"tipoMov"
-).value;
+        salvarEstadoHistorico();
+        materiais[indice].quantidade -= qtd;
+    } else {
+        salvarEstadoHistorico();
+        materiais[indice].quantidade += qtd;
+    }
 
-let qtd =
-Number(
-document.getElementById(
-"qtdMov"
-).value
-);
+    historico.push({
+        data: new Date().toLocaleString("pt-BR"),
+        material: materiais[indice].nome,
+        tipo: tipo,
+        quantidade: qtd,
+        responsavel: responsavel || "-",
+        destino: destino || "-"
+    });
 
-let responsavel =
-document.getElementById(
-"responsavelMov"
-).value.trim();
+    salvar();
+    atualizarTela();
 
-let destino =
-document.getElementById(
-"destinoMov"
-).value.trim();if(
-isNaN(qtd) ||
-qtd <= 0
-){
+    document.getElementById("qtdMov").value = "";
+    document.getElementById("responsavelMov").value = "";
+    document.getElementById("destinoMov").value = "";
 
-alert(
-"Quantidade inválida."
-);
-
-return;
-
-}
-
-if(
-tipo === "saida"
-){
-
-if(
-responsavel === ""
-){
-
-alert(
-"Informe o responsável pela retirada."
-);
-
-return;
-
-}
-
-if(
-destino === ""
-){
-
-alert(
-"Informe o destino do material."
-);
-
-return;
-
-}
-
-if(
-materiais[indice]
-.quantidade < qtd
-){
-
-alert(
-"Estoque insuficiente."
-);
-
-return;
-
-}
-
-materiais[indice]
-.quantidade -= qtd;
-
-}
-else{
-
-materiais[indice]
-.quantidade += qtd;
-
-}
-
-historico.push({
-
-data:
-new Date()
-.toLocaleString(
-"pt-BR"
-),
-
-material:
-materiais[indice]
-.nome,
-
-tipo:tipo,
-
-quantidade:qtd,
-
-responsavel:
-responsavel || "-",
-
-destino:
-destino || "-"
-
-});
-
-salvar();
-
-atualizarTela();
-
-document.getElementById(
-"qtdMov"
-).value = "";
-
-document.getElementById(
-"responsavelMov"
-).value = "";
-
-document.getElementById(
-"destinoMov"
-).value = "";
-
-alert(
-"Movimentação registrada com sucesso!"
-);
-
+    alert("Movimentação registrada com sucesso!");
 }
 
 function excluirMaterial(index){
-
-if(
-confirm(
-"Deseja realmente excluir este material?"
-)
-){
-
-materiais.splice(
-index,
-1
-);
-
-salvar();
-
-atualizarTela();
-
-alert(
-"Material excluído com sucesso."
-);
-
+    if(confirm("Deseja realmente excluir este material?")){
+        salvarEstadoHistorico();
+        materiais.splice(index, 1);
+        salvar();
+        atualizarTela();
+        alert("Material excluído com sucesso.");
+    }
 }
 
-}function gerarRelatorio(){
-
-let janela =
-window.open(
-"",
-"_blank"
-);
-
-let estoqueHTML = "";
-
-materiais.forEach(m=>{
-
-estoqueHTML += `
-
-<tr>
-
-<td>${m.nome}</td>
-
-<td>${m.categoria}</td>
-
-<td>${m.quantidade}</td>
-
-</tr>
-
-`;
-
-});
-
-let historicoHTML = "";
-
-historico.forEach(h=>{
-
-historicoHTML += `
-
-<tr>
-
-<td>${h.data}</td>
-
-<td>${h.material}</td>
-
-<td>${h.tipo}</td>
-
-<td>${h.quantidade}</td>
-
-<td>${h.responsavel || "-"}</td>
-
-<td>${h.destino || "-"}</td>
-
-</tr>
-
-`;
-
-});
-
-janela.document.write(`
-
-<html>
-
-<head>
-
-<title>
-Relatório de Materiais
-</title>
-
-<style>
-
-body{
-font-family:Arial;
-padding:20px;
+function apagarItemHistorico(indexReal) {
+    if(confirm("Deseja realmente apagar este registro do histórico?")){
+        salvarEstadoHistorico();
+        historico.splice(indexReal, 1);
+        salvar();
+        atualizarTela();
+        alert("Registro do histórico removido com sucesso.");
+    }
 }
 
-h1,h2{
-color:#003366;
-}
+function gerarRelatorio(){
+    let janela = window.open("", "_blank");
+    let estoqueHTML = "";
 
-table{
-width:100%;
-border-collapse:collapse;
-margin-top:10px;
-margin-bottom:20px;
-}
+    materials = materiais || [];
+    materiais.forEach(m => {
+        estoqueHTML += `
+        <tr>
+            <td>${m.nome}</td>
+            <td>${m.categoria}</td>
+            <td>${m.quantidade}</td>
+        </tr>`;
+    });
 
-th,td{
-border:1px solid #ccc;
-padding:8px;
-text-align:center;
-}
+    let historicoHTML = "";
 
-th{
-background:#003366;
-color:white;
-}
+    historico.forEach(h => {
+        historicoHTML += `
+        <tr>
+            <td>${h.data}</td>
+            <td>${h.material}</td>
+            <td>${h.tipo}</td>
+            <td>${h.quantidade}</td>
+            <td>${h.responsavel || "-"}</td>
+            <td>${h.destino || "-"}</td>
+        </tr>`;
+    });
 
-.info{
-margin-bottom:20px;
-font-size:16px;
-}
+    janela.document.write(`
+    <html>
+    <head>
+    <title>Relatório de Materiais</title>
+    <style>
+    body{ font-family:Arial; padding:20px; }
+    h1,h2{ color:#003366; }
+    table{ width:100%; border-collapse:collapse; margin-top:10px; margin-bottom:20px; }
+    th,td{ border:1px solid #ccc; padding:8px; text-align:center; }
+    th{ background:#003366; color:white; }
+    .info{ margin-bottom:20px; font-size:16px; }
+    </style>
+    </head>
+    <body>
+    <h1>Relatório de Controle de Materiais</h1>
+    <div class="info">
+    <strong>Data:</strong> ${new Date().toLocaleString("pt-BR")}
+    </div>
+    <h2>Resumo Geral</h2>
+    <p><b>Total de Materiais:</b> ${materiais.length}</p>
+    <p><b>Total em Estoque:</b> ${materiais.reduce((t,m) => t + Number(m.quantidade), 0)}</p>
+    <h2>Estoque Atual</h2>
+    <table>
+    <tr><th>Material</th><th>Categoria</th><th>Quantidade</th></tr>
+    ${estoqueHTML}
+    </table>
+    <h2>Histórico de Movimentações</h2>
+    <table>
+    <tr><th>Data</th><th>Material</th><th>Tipo</th><th>Quantidade</th><th>Responsável</th><th>Destino</th></tr>
+    ${historicoHTML}
+    </table>
+    <script>window.print();<\/script>
+    </body>
+    </html>`);
 
-</style>
-
-</head>
-
-<body>
-
-<h1>
-Relatório de Controle de Materiais
-</h1>
-
-<div class="info">
-
-<strong>Data:</strong>
-
-${new Date().toLocaleString("pt-BR")}
-
-</div>
-
-<h2>Resumo Geral</h2>
-
-<p>
-
-<b>Total de Materiais:</b>
-
-${materiais.length}
-
-</p>
-
-<p>
-
-<b>Total em Estoque:</b>
-
-${materiais.reduce(
-(t,m)=>
-t + Number(m.quantidade),
-0
-)}
-
-</p>
-
-<h2>
-Estoque Atual
-</h2>
-
-<table>
-
-<tr>
-
-<th>Material</th>
-
-<th>Categoria</th>
-
-<th>Quantidade</th>
-
-</tr>
-
-${estoqueHTML}
-
-</table><h2>
-Histórico de Movimentações
-</h2>
-
-<table>
-
-<tr>
-
-<th>Data</th>
-
-<th>Material</th>
-
-<th>Tipo</th>
-
-<th>Quantidade</th>
-
-<th>Responsável</th>
-
-<th>Destino</th>
-
-</tr>
-
-${historicoHTML}
-
-</table>
-
-<script>
-
-window.print();
-
-<\/script>
-
-</body>
-
-</html>
-
-`);
-
-janela.document.close();
-
+    janela.document.close();
 }
 
 atualizarTela();
-
 </script>
 
 </body>
-
 </html>
