@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Controle de Materiais - Login</title>
+<title>Controle de Materiais - Login Restrito</title>
 
 <style>
 *{
@@ -189,19 +189,6 @@ margin-bottom: 20px;
 margin-bottom: 15px;
 }
 
-.login-card .btn-grupo {
-display: flex;
-gap: 10px;
-margin-top: 10px;
-}
-
-.login-card .btn-registro {
-background: #555;
-}
-.login-card .btn-registro:hover {
-background: #777;
-}
-
 .header-app {
 display: flex;
 justify-content: space-between;
@@ -221,6 +208,15 @@ padding: 8px 15px;
 .btn-logout:hover {
 background: #e74c3c;
 }
+
+.busca-container {
+margin-bottom: 15px;
+}
+.busca-container input {
+border: 2px solid #003366;
+background: #fdfdfd;
+font-size: 15px;
+}
 </style>
 </head>
 
@@ -232,10 +228,7 @@ background: #e74c3c;
         <input type="email" id="loginEmail" placeholder="E-mail">
         <input type="password" id="loginSenha" placeholder="Senha">
         
-        <div class="btn-grupo">
-            <button onclick="fazerLogin()">Entrar</button>
-            <button onclick="cadastrarUsuario()" class="btn-registro">Cadastrar</button>
-        </div>
+        <button onclick="fazerLogin()">Entrar</button>
     </div>
 </div>
 
@@ -352,6 +345,10 @@ Registrar Movimentação
 
 <br>
 
+<div class="busca-container">
+    <input type="text" id="campoBusca" placeholder="🔍 Buscar por material ou categoria..." oninput="filtrarTabela()">
+</div>
+
 <table>
 
 <thead>
@@ -420,7 +417,7 @@ onclick="gerarRelatorio()">
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 // Configurações do seu Firebase
 const firebaseConfig = {
@@ -439,14 +436,13 @@ const auth = getAuth(app);
 
 const docRef = doc(db, "appData", "controleMateriais");
 
-// Escopo global para manter as variáveis e funções acessíveis pelos botões
+// Escopo global
 window.materiais = [];
 window.historico = [];
 window.pilhaUndo = [];
 window.pilhaRedo = [];
 
-// --- FUNÇÕES DE AUTENTICAÇÃO ---
-
+// --- FUNÇÃO DE LOGIN ---
 window.fazerLogin = function() {
     const email = document.getElementById("loginEmail").value.trim();
     const senha = document.getElementById("loginSenha").value;
@@ -458,34 +454,11 @@ window.fazerLogin = function() {
 
     signInWithEmailAndPassword(auth, email, senha)
         .then(() => {
-            alert("Login realizado com sucesso! Carregando dados...");
+            alert("Acesso autorizado!");
         })
         .catch(error => {
             console.error("Erro de Login:", error);
-            alert("Erro ao entrar: " + error.message);
-        });
-};
-
-window.cadastrarUsuario = function() {
-    const email = document.getElementById("loginEmail").value.trim();
-    const senha = document.getElementById("loginSenha").value;
-
-    if (!email || !senha) {
-        alert("Preencha todos os campos para cadastrar.");
-        return;
-    }
-    if (senha.length < 6) {
-        alert("A senha deve ter pelo menos 6 caracteres.");
-        return;
-    }
-
-    createUserWithEmailAndPassword(auth, email, senha)
-        .then(() => {
-            alert("Usuário cadastrado e conectado com sucesso!");
-        })
-        .catch(error => {
-            console.error("Erro de Cadastro:", error);
-            alert("Erro ao cadastrar: " + error.message);
+            alert("Usuário não autorizado ou senha incorreta.");
         });
 };
 
@@ -505,30 +478,25 @@ onAuthStateChanged(auth, (user) => {
     const usuarioLogadoEmail = document.getElementById("usuarioLogadoEmail");
 
     if (user) {
-        // Usuário logado: Mostra o app e esconde a tela de login
         loginContainer.style.display = "none";
         appContainer.style.display = "block";
         usuarioLogadoEmail.innerText = `Usuário: ${user.email}`;
 
-        // Inicia a escuta em tempo real do banco de dados
         unsubscribeFirestore = onSnapshot(docRef, (snapshot) => {
             if (snapshot.exists()) {
                 const dados = snapshot.data();
-                window.materiais = dados.materiais || [];
+                window.materiais = dados.materials || dados.materiais || [];
                 window.historico = dados.historico || [];
             } else {
-                // CORREÇÃO CRÍTICA: Se o documento não existir no banco ainda, inicializa zerado na tela
                 window.materiais = [];
                 window.historico = [];
             }
             atualizarTela();
         }, (error) => {
-            console.error("Erro de Permissão ou Leitura no Firestore:", error);
-            alert("Atenção: Erro ao carregar os dados do banco. Verifique se as Regras do Firestore estão públicas.");
+            console.error("Erro no Firestore:", error);
         });
 
     } else {
-        // Usuário deslogado: Mostra a tela de login e esconde o app
         loginContainer.style.display = "flex";
         appContainer.style.display = "none";
         
@@ -540,7 +508,7 @@ onAuthStateChanged(auth, (user) => {
 });
 
 
-// --- LÓGICA ORIGINAL DO APLICATIVO ---
+// --- LÓGICA DO APLICATIVO ---
 
 async function salvar(){
     try {
@@ -549,8 +517,7 @@ async function salvar(){
             historico: window.historico
         });
     } catch (e) {
-        console.error("Erro crítico ao salvar no Firebase: ", e);
-        alert("Erro ao salvar dados. Verifique suas regras do banco.");
+        console.error("Erro ao salvar:", e);
     }
 }
 
@@ -599,6 +566,10 @@ window.refazer = function() {
     atualizarTela();
 }
 
+window.filtrarTabela = function() {
+    atualizarTela();
+}
+
 function atualizarTela(){
     let tabela = document.getElementById("tabelaMateriais");
     tabela.innerHTML = "";
@@ -607,24 +578,30 @@ function atualizarTela(){
     select.innerHTML = "";
 
     let estoqueTotal = 0;
+    let termoBusca = document.getElementById("campoBusca") ? document.getElementById("campoBusca").value.toLowerCase() : "";
 
     window.materiais.forEach((m, index) => {
         estoqueTotal += Number(m.quantidade);
-
-        tabela.innerHTML += `
-        <tr>
-            <td>${m.nome}</td>
-            <td>${m.categoria}</td>
-            <td>${m.quantidade}</td>
-            <td>
-                <button class="btn-excluir-tabela" onclick="excluirMaterial(${index})">Excluir</button>
-            </td>
-        </tr>`;
 
         select.innerHTML += `
         <option value="${index}">
             ${m.nome}
         </option>`;
+
+        let nomeBate = m.nome.toLowerCase().includes(termoBusca);
+        let categoriaBate = m.categoria.toLowerCase().includes(termoBusca);
+
+        if (nomeBate || categoriaBate) {
+            tabela.innerHTML += `
+            <tr>
+                <td>${m.nome}</td>
+                <td>${m.categoria}</td>
+                <td>${m.quantidade}</td>
+                <td>
+                    <button class="btn-excluir-tabela" onclick="excluirMaterial(${index})">Excluir</button>
+                </td>
+            </tr>`;
+        }
     });
 
     document.getElementById("totalMateriais").innerText = window.materiais.length;
@@ -669,27 +646,17 @@ window.cadastrarMaterial = function(){
     }
 
     salvarEstadoHistorico();
-
-    window.materiais.push({
-        nome: nome,
-        categoria: categoria,
-        quantidade: qtd
-    });
-
+    window.materiais.push({ nome: nome, categoria: categoria, quantidade: qtd });
     salvar();
     atualizarTela();
 
     document.getElementById("nomeMaterial").value = "";
     document.getElementById("quantidadeInicial").value = "";
-
-    alert("Material cadastrado com sucesso!");
+    alert("Material cadastrado!");
 }
 
 window.registrarMovimentacao = function(){
-    if(window.materiais.length === 0){
-        alert("Cadastre um material primeiro.");
-        return;
-    }
+    if(window.materiais.length === 0) return;
 
     let indice = document.getElementById("materialMov").value;
     let tipo = document.getElementById("tipoMov").value;
@@ -697,27 +664,13 @@ window.registrarMovimentacao = function(){
     let responsavel = document.getElementById("responsavelMov").value.trim();
     let destino = document.getElementById("destinoMov").value.trim();
 
-    if(isNaN(qtd) || qtd <= 0){
-        alert("Quantidade inválida.");
-        return;
-    }
+    if(isNaN(qtd) || qtd <= 0) return;
 
     if(tipo === "saida"){
-        if(responsavel === ""){
-            alert("Informe o responsável pela retirada.");
+        if(responsavel === "" || destino === "" || window.materiais[indice].quantidade < qtd){
+            alert("Verifique os dados ou saldo insuficiente.");
             return;
         }
-
-        if(destino === ""){
-            alert("Informe o destino do material.");
-            return;
-        }
-
-        if(window.materiais[indice].quantidade < qtd){
-            alert("Estoque insuficiente.");
-            return;
-        }
-
         salvarEstadoHistorico();
         window.materiais[indice].quantidade -= qtd;
     } else {
@@ -740,93 +693,41 @@ window.registrarMovimentacao = function(){
     document.getElementById("qtdMov").value = "";
     document.getElementById("responsavelMov").value = "";
     document.getElementById("destinoMov").value = "";
-
-    alert("Movimentação registrada com sucesso!");
 }
 
 window.excluirMaterial = function(index){
-    if(confirm("Deseja realmente excluir este material?")){
+    if(confirm("Deseja excluir este material?")){
         salvarEstadoHistorico();
         window.materiais.splice(index, 1);
         salvar();
         atualizarTela();
-        alert("Material excluído com sucesso.");
     }
 }
 
 window.apagarItemHistorico = function(indexReal) {
-    if(confirm("Deseja realmente apagar este registro do histórico?")){
+    if(confirm("Deseja apagar esta movimentação?")){
         salvarEstadoHistorico();
         window.historico.splice(indexReal, 1);
         salvar();
         atualizarTela();
-        alert("Registro do histórico removido com sucesso.");
     }
 }
 
 window.gerarRelatorio = function(){
     let janela = window.open("", "_blank");
     let estoqueHTML = "";
-
-    let listaMateriais = window.materiais || [];
-    listaMateriais.forEach(m => {
-        estoqueHTML += `
-        <tr>
-            <td>${m.nome}</td>
-            <td>${m.categoria}</td>
-            <td>${m.quantidade}</td>
-        </tr>`;
+    window.materiais.forEach(m => {
+        estoqueHTML += `<tr><td>${m.nome}</td><td>${m.categoria}</td><td>${m.quantidade}</td></tr>`;
     });
 
     let historicoHTML = "";
-
     window.historico.forEach(h => {
-        historicoHTML += `
-        <tr>
-            <td>${h.data}</td>
-            <td>${h.material}</td>
-            <td>${h.tipo}</td>
-            <td>${h.quantidade}</td>
-            <td>${h.responsavel || "-"}</td>
-            <td>${h.destino || "-"}</td>
-        </tr>`;
+        historicoHTML += `<tr><td>${h.data}</td><td>${h.material}</td><td>${h.tipo}</td><td>${h.quantidade}</td><td>${h.responsavel}</td><td>${h.destino}</td></tr>`;
     });
 
     janela.document.write(`
-    <html>
-    <head>
-    <title>Relatório de Materiais</title>
-    <style>
-    body{ font-family:Arial; padding:20px; }
-    h1,h2{ color:#003366; }
-    table{ width:100%; border-collapse:collapse; margin-top:10px; margin-bottom:20px; }
-    th,td{ border:1px solid #ccc; padding:8px; text-align:center; }
-    th{ background:#003366; color:white; }
-    .info{ margin-bottom:20px; font-size:16px; }
-    </style>
-    </head>
-    <body>
-    <h1>Relatório de Controle de Materiais</h1>
-    <div class="info">
-    <strong>Data:</strong> ${new Date().toLocaleString("pt-BR")}
-    </div>
-    <h2>Resumo Geral</h2>
-    <p><b>Total de Materiais:</b> ${window.materiais.length}</p>
-    <p><b>Total em Estoque:</b> ${window.materiais.reduce((t,m) => t + Number(m.quantidade), 0)}</p>
-    <h2>Estoque Atual</h2>
-    <table>
-    <tr><th>Material</th><th>Categoria</th><th>Quantidade</th></tr>
-    ${estoqueHTML}
-    </table>
-    <h2>Histórico de Movimentações</h2>
-    <table>
-    <tr><th>Data</th><th>Material</th><th>Tipo</th><th>Quantidade</th><th>Responsável</th><th>Destino</th></tr>
-    ${historicoHTML}
-    </table>
-    <script>window.print();<\/script>
-    </body>
-    </html>`);
-
+    <html><head><title>Relatório</title><style>body{font-family:Arial;padding:20px;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ccc;padding:8px;text-align:center;}th{background:#003366;color:white;}</style></head>
+    <body><h1>Relatório Geral</h1><br><h2>Estoque</h2><table><tr><th>Material</th><th>Categoria</th><th>Quantidade</th></tr>${estoqueHTML}</table><h2>Histórico</h2><table><tr><th>Data</th><th>Material</th><th>Tipo</th><th>Quantidade</th><th>Responsável</th><th>Destino</th></tr>${historicoHTML}</table><script>window.print();<\/script></body></html>`);
     janela.document.close();
 }
 </script>
