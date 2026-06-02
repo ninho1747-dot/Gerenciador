@@ -4,10 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Controle de Materiais</title>
+<title>Controle de Materiais - Login</title>
 
 <style>
-
 *{
 margin:0;
 padding:0;
@@ -23,6 +22,7 @@ padding:20px;
 .container{
 max-width:1200px;
 margin:auto;
+display: none; /* Escondido por padrão até o login ser feito */
 }
 
 h1{
@@ -156,14 +156,98 @@ font-size: 13px;
 background: #e74c3c;
 }
 
+/* --- ESTILOS DA TELA DE LOGIN --- */
+.login-overlay {
+position: fixed;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+background: #002244;
+display: flex;
+justify-content: center;
+align-items: center;
+z-index: 9999;
+}
+
+.login-card {
+background: white;
+padding: 30px;
+border-radius: 12px;
+box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+width: 100%;
+max-width: 400px;
+text-align: center;
+}
+
+.login-card h2 {
+color: #003366;
+margin-bottom: 20px;
+}
+
+.login-card input {
+margin-bottom: 15px;
+}
+
+.login-card .btn-grupo {
+display: flex;
+gap: 10px;
+margin-top: 10px;
+}
+
+.login-card .btn-registro {
+background: #555;
+}
+.login-card .btn-registro:hover {
+background: #777;
+}
+
+.header-app {
+display: flex;
+justify-content: space-between;
+align-items: center;
+margin-bottom: 20px;
+background: white;
+padding: 15px;
+border-radius: 10px;
+box-shadow: 0 2px 8px rgba(0,0,0,.1);
+}
+
+.btn-logout {
+background: #c0392b;
+width: auto;
+padding: 8px 15px;
+}
+.btn-logout:hover {
+background: #e74c3c;
+}
 </style>
 </head>
 
 <body>
 
-<div class="container">
+<div id="loginContainer" class="login-overlay">
+    <div class="login-card">
+        <h2>🔒 Acesso ao Sistema</h2>
+        <input type="email" id="loginEmail" placeholder="E-mail">
+        <input type="password" id="loginSenha" placeholder="Senha">
+        
+        <div class="btn-grupo">
+            <button onclick="fazerLogin()">Entrar</button>
+            <button onclick="cadastrarUsuario()" class="btn-registro">Cadastrar</button>
+        </div>
+    </div>
+</div>
 
-<h1>📦 Controle de Materiais</h1>
+<div id="appContainer" class="container">
+
+<div class="header-app">
+    <h2>📦 Controle de Materiais</h2>
+    <div>
+        <span id="usuarioLogadoEmail" style="margin-right: 15px; font-weight: bold; color: #555;"></span>
+        <button onclick="fazerLogout()" class="btn-logout">Sair 🚪</button>
+    </div>
+</div>
 
 <div class="btn-acoes-historico">
     <button id="btnUndo" class="undo-btn" onclick="desfazer()">↩️ Desfazer Última Ação</button>
@@ -333,59 +417,183 @@ onclick="gerarRelatorio()">
 
 </div>
 
-<script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
-let materiais = JSON.parse(localStorage.getItem("materiais")) || [];
-let historico = JSON.parse(localStorage.getItem("historico")) || [];
+// Configurações do seu Firebase
+const firebaseConfig = {
+  apiKey: "AIzaSyCD5od0xV5JD4Odo7rSd571l2rm73mO8q4",
+  authDomain: "gerenciador-cd853.firebaseapp.com",
+  projectId: "gerenciador-cd853",
+  storageBucket: "gerenciador-cd853.firebasestorage.app",
+  messagingSenderId: "42009235717",
+  appId: "1:42009235717:web:91f4119a5491ba9b91676c"
+};
 
-let pilhaUndo = [];
-let pilhaRedo = [];
+// Inicializando Firebase, Firestore e Auth
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
 
-function salvar(){
-    localStorage.setItem("materiais", JSON.stringify(materiais));
-    localStorage.setItem("historico", JSON.stringify(historico));
+const docRef = doc(db, "appData", "controleMateriais");
+
+// Escopo global para manter as variáveis e funções acessíveis pelos botões
+window.materiais = [];
+window.historico = [];
+window.pilhaUndo = [];
+window.pilhaRedo = [];
+
+// --- FUNÇÕES DE AUTENTICAÇÃO ---
+
+window.fazerLogin = function() {
+    const email = document.getElementById("loginEmail").value.trim();
+    const senha = document.getElementById("loginSenha").value;
+
+    if (!email || !senha) {
+        alert("Preencha todos os campos de login.");
+        return;
+    }
+
+    signInWithEmailAndPassword(auth, email, senha)
+        .then(() => {
+            alert("Login realizado com sucesso! Carregando dados...");
+        })
+        .catch(error => {
+            console.error("Erro de Login:", error);
+            alert("Erro ao entrar: " + error.message);
+        });
+};
+
+window.cadastrarUsuario = function() {
+    const email = document.getElementById("loginEmail").value.trim();
+    const senha = document.getElementById("loginSenha").value;
+
+    if (!email || !senha) {
+        alert("Preencha todos os campos para cadastrar.");
+        return;
+    }
+    if (senha.length < 6) {
+        alert("A senha deve ter pelo menos 6 caracteres.");
+        return;
+    }
+
+    createUserWithEmailAndPassword(auth, email, senha)
+        .then(() => {
+            alert("Usuário cadastrado e conectado com sucesso!");
+        })
+        .catch(error => {
+            console.error("Erro de Cadastro:", error);
+            alert("Erro ao cadastrar: " + error.message);
+        });
+};
+
+window.fazerLogout = function() {
+    signOut(auth).then(() => {
+        document.getElementById("loginEmail").value = "";
+        document.getElementById("loginSenha").value = "";
+    });
+};
+
+// Monitoramento do Estado de Login em tempo real
+let unsubscribeFirestore = null;
+
+onAuthStateChanged(auth, (user) => {
+    const loginContainer = document.getElementById("loginContainer");
+    const appContainer = document.getElementById("appContainer");
+    const usuarioLogadoEmail = document.getElementById("usuarioLogadoEmail");
+
+    if (user) {
+        // Usuário logado: Mostra o app e esconde a tela de login
+        loginContainer.style.display = "none";
+        appContainer.style.display = "block";
+        usuarioLogadoEmail.innerText = `Usuário: ${user.email}`;
+
+        // Inicia a escuta em tempo real do banco de dados
+        unsubscribeFirestore = onSnapshot(docRef, (snapshot) => {
+            if (snapshot.exists()) {
+                const dados = snapshot.data();
+                window.materiais = dados.materiais || [];
+                window.historico = dados.historico || [];
+            } else {
+                // CORREÇÃO CRÍTICA: Se o documento não existir no banco ainda, inicializa zerado na tela
+                window.materiais = [];
+                window.historico = [];
+            }
+            atualizarTela();
+        }, (error) => {
+            console.error("Erro de Permissão ou Leitura no Firestore:", error);
+            alert("Atenção: Erro ao carregar os dados do banco. Verifique se as Regras do Firestore estão públicas.");
+        });
+
+    } else {
+        // Usuário deslogado: Mostra a tela de login e esconde o app
+        loginContainer.style.display = "flex";
+        appContainer.style.display = "none";
+        
+        if (unsubscribeFirestore) {
+            unsubscribeFirestore();
+            unsubscribeFirestore = null;
+        }
+    }
+});
+
+
+// --- LÓGICA ORIGINAL DO APLICATIVO ---
+
+async function salvar(){
+    try {
+        await setDoc(docRef, {
+            materiais: window.materiais,
+            historico: window.historico
+        });
+    } catch (e) {
+        console.error("Erro crítico ao salvar no Firebase: ", e);
+        alert("Erro ao salvar dados. Verifique suas regras do banco.");
+    }
 }
 
 function salvarEstadoHistorico() {
-    pilhaUndo.push({
-        materiais: JSON.parse(JSON.stringify(materiais)),
-        historico: JSON.parse(JSON.stringify(historico))
+    window.pilhaUndo.push({
+        materiais: JSON.parse(JSON.stringify(window.materiais)),
+        historico: JSON.parse(JSON.stringify(window.historico))
     });
-    pilhaRedo = [];
+    window.pilhaRedo = [];
 }
 
 function atualizarBotoesUndoRedo() {
-    document.getElementById("btnUndo").disabled = pilhaUndo.length === 0;
-    document.getElementById("btnRedo").disabled = pilhaRedo.length === 0;
+    document.getElementById("btnUndo").disabled = window.pilhaUndo.length === 0;
+    document.getElementById("btnRedo").disabled = window.pilhaRedo.length === 0;
 }
 
-function desfazer() {
-    if (pilhaUndo.length === 0) return;
+window.desfazer = function() {
+    if (window.pilhaUndo.length === 0) return;
 
-    pilhaRedo.push({
-        materiais: JSON.parse(JSON.stringify(materiais)),
-        historico: JSON.parse(JSON.stringify(historico))
+    window.pilhaRedo.push({
+        materiais: JSON.parse(JSON.stringify(window.materiais)),
+        historico: JSON.parse(JSON.stringify(window.historico))
     });
 
-    let estadoAnterior = pilhaUndo.pop();
-    materiais = estadoAnterior.materiais;
-    historico = estadoAnterior.historico;
+    let estadoAnterior = window.pilhaUndo.pop();
+    window.materiais = estadoAnterior.materiais;
+    window.historico = estadoAnterior.historico;
 
     salvar();
     atualizarTela();
 }
 
-function refazer() {
-    if (pilhaRedo.length === 0) return;
+window.refazer = function() {
+    if (window.pilhaRedo.length === 0) return;
 
-    pilhaUndo.push({
-        materiais: JSON.parse(JSON.stringify(materiais)),
-        historico: JSON.parse(JSON.stringify(historico))
+    window.pilhaUndo.push({
+        materiais: JSON.parse(JSON.stringify(window.materiais)),
+        historico: JSON.parse(JSON.stringify(window.historico))
     });
 
-    let proximoEstado = pilhaRedo.pop();
-    materiais = proximoEstado.materiais;
-    historico = proximoEstado.historico;
+    let proximoEstado = window.pilhaRedo.pop();
+    window.materiais = proximoEstado.materiais;
+    window.historico = proximoEstado.historico;
 
     salvar();
     atualizarTela();
@@ -400,7 +608,7 @@ function atualizarTela(){
 
     let estoqueTotal = 0;
 
-    materiais.forEach((m, index) => {
+    window.materiais.forEach((m, index) => {
         estoqueTotal += Number(m.quantidade);
 
         tabela.innerHTML += `
@@ -419,14 +627,13 @@ function atualizarTela(){
         </option>`;
     });
 
-    document.getElementById("totalMateriais").innerText = materiais.length;
+    document.getElementById("totalMateriais").innerText = window.materiais.length;
     document.getElementById("totalEstoque").innerText = estoqueTotal;
 
     let hist = document.getElementById("historico");
     hist.innerHTML = "";
 
-    // Mapeia o histórico mantendo o índice real antes de inverter a ordem para exibição
-    let historicoMapeado = historico.map((h, index) => ({ ...h, indexReal: index }));
+    let historicoMapeado = window.historico.map((h, index) => ({ ...h, indexReal: index }));
     
     historicoMapeado.reverse().forEach(h => {
         hist.innerHTML += `
@@ -446,7 +653,7 @@ function atualizarTela(){
     atualizarBotoesUndoRedo();
 }
 
-function cadastrarMaterial(){
+window.cadastrarMaterial = function(){
     let nome = document.getElementById("nomeMaterial").value.trim();
     let categoria = document.getElementById("categoria").value;
     let qtd = Number(document.getElementById("quantidadeInicial").value);
@@ -463,7 +670,7 @@ function cadastrarMaterial(){
 
     salvarEstadoHistorico();
 
-    materiais.push({
+    window.materiais.push({
         nome: nome,
         categoria: categoria,
         quantidade: qtd
@@ -478,8 +685,8 @@ function cadastrarMaterial(){
     alert("Material cadastrado com sucesso!");
 }
 
-function registrarMovimentacao(){
-    if(materiais.length === 0){
+window.registrarMovimentacao = function(){
+    if(window.materiais.length === 0){
         alert("Cadastre um material primeiro.");
         return;
     }
@@ -506,21 +713,21 @@ function registrarMovimentacao(){
             return;
         }
 
-        if(materiais[indice].quantidade < qtd){
+        if(window.materiais[indice].quantidade < qtd){
             alert("Estoque insuficiente.");
             return;
         }
 
         salvarEstadoHistorico();
-        materiais[indice].quantidade -= qtd;
+        window.materiais[indice].quantidade -= qtd;
     } else {
         salvarEstadoHistorico();
-        materiais[indice].quantidade += qtd;
+        window.materiais[indice].quantidade += qtd;
     }
 
-    historico.push({
+    window.historico.push({
         data: new Date().toLocaleString("pt-BR"),
-        material: materiais[indice].nome,
+        material: window.materiais[indice].nome,
         tipo: tipo,
         quantidade: qtd,
         responsavel: responsavel || "-",
@@ -537,32 +744,32 @@ function registrarMovimentacao(){
     alert("Movimentação registrada com sucesso!");
 }
 
-function excluirMaterial(index){
+window.excluirMaterial = function(index){
     if(confirm("Deseja realmente excluir este material?")){
         salvarEstadoHistorico();
-        materiais.splice(index, 1);
+        window.materiais.splice(index, 1);
         salvar();
         atualizarTela();
         alert("Material excluído com sucesso.");
     }
 }
 
-function apagarItemHistorico(indexReal) {
+window.apagarItemHistorico = function(indexReal) {
     if(confirm("Deseja realmente apagar este registro do histórico?")){
         salvarEstadoHistorico();
-        historico.splice(indexReal, 1);
+        window.historico.splice(indexReal, 1);
         salvar();
         atualizarTela();
         alert("Registro do histórico removido com sucesso.");
     }
 }
 
-function gerarRelatorio(){
+window.gerarRelatorio = function(){
     let janela = window.open("", "_blank");
     let estoqueHTML = "";
 
-    materials = materiais || [];
-    materiais.forEach(m => {
+    let listaMateriais = window.materiais || [];
+    listaMateriais.forEach(m => {
         estoqueHTML += `
         <tr>
             <td>${m.nome}</td>
@@ -573,7 +780,7 @@ function gerarRelatorio(){
 
     let historicoHTML = "";
 
-    historico.forEach(h => {
+    window.historico.forEach(h => {
         historicoHTML += `
         <tr>
             <td>${h.data}</td>
@@ -604,8 +811,8 @@ function gerarRelatorio(){
     <strong>Data:</strong> ${new Date().toLocaleString("pt-BR")}
     </div>
     <h2>Resumo Geral</h2>
-    <p><b>Total de Materiais:</b> ${materiais.length}</p>
-    <p><b>Total em Estoque:</b> ${materiais.reduce((t,m) => t + Number(m.quantidade), 0)}</p>
+    <p><b>Total de Materiais:</b> ${window.materiais.length}</p>
+    <p><b>Total em Estoque:</b> ${window.materiais.reduce((t,m) => t + Number(m.quantidade), 0)}</p>
     <h2>Estoque Atual</h2>
     <table>
     <tr><th>Material</th><th>Categoria</th><th>Quantidade</th></tr>
@@ -622,8 +829,6 @@ function gerarRelatorio(){
 
     janela.document.close();
 }
-
-atualizarTela();
 </script>
 
 </body>
